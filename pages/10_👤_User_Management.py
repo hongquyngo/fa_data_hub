@@ -83,6 +83,8 @@ AVAILABLE_ROLES = [
     'allocator',
     'GM',
     'MD',
+    'accountant',
+    'fa_manager',
     'customer',
     'vendor',
     'viewer'
