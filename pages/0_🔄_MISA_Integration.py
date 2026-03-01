@@ -18,13 +18,10 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
 import os
 
 from utils.auth import AuthManager
-
-# Load environment variables
-load_dotenv()
+from utils.config import config
 
 # ==================== AUTH CHECK ====================
 
@@ -763,9 +760,10 @@ with st.sidebar:
     st.markdown("---")
     st.header("🔐 Kết nối MISA AMIS")
 
-    env_app_id = os.getenv("MISA_APP_ID", "")
-    env_access_code = os.getenv("MISA_ACCESS_CODE", "")
-    env_org_code = os.getenv("MISA_ORG_COMPANY_CODE", "prostech")
+    misa_cfg = config.get_misa_config()
+    env_app_id = misa_cfg.get("app_id", "") or ""
+    env_access_code = misa_cfg.get("access_code", "") or ""
+    env_org_code = misa_cfg.get("org_company_code", "prostech") or "prostech"
 
     app_id = st.text_input(
         "App ID",

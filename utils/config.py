@@ -95,6 +95,24 @@ class EmailConfig:
         return bool(self.sender and self.password)
 
 
+@dataclass
+class MisaConfig:
+    """MISA AMIS API configuration container"""
+    app_id: Optional[str] = None
+    access_code: Optional[str] = None
+    org_company_code: str = "prostech"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'app_id': self.app_id,
+            'access_code': self.access_code,
+            'org_company_code': self.org_company_code
+        }
+    
+    def is_configured(self) -> bool:
+        return bool(self.app_id and self.access_code)
+
+
 class Config:
     """
     Centralized configuration management
@@ -192,6 +210,14 @@ class Config:
         # Google Cloud
         self._google_service_account = dict(st.secrets.get("gcp_service_account", {}))
         
+        # MISA AMIS
+        misa_secrets = st.secrets.get("MISA_CONFIG", {})
+        self._misa_config = MisaConfig(
+            app_id=misa_secrets.get("MISA_APP_ID"),
+            access_code=misa_secrets.get("MISA_ACCESS_CODE"),
+            org_company_code=misa_secrets.get("MISA_ORG_COMPANY_CODE", "prostech")
+        )
+        
         logger.info("☁️ Running in STREAMLIT CLOUD")
     
     def _load_local_config(self):
@@ -267,6 +293,13 @@ class Config:
                     self._google_service_account = json.load(f)
             except Exception as e:
                 logger.warning(f"Could not load Google credentials: {e}")
+        
+        # MISA AMIS
+        self._misa_config = MisaConfig(
+            app_id=os.getenv("MISA_APP_ID"),
+            access_code=os.getenv("MISA_ACCESS_CODE"),
+            org_company_code=os.getenv("MISA_ORG_COMPANY_CODE", "prostech")
+        )
         
         logger.info("💻 Running in LOCAL environment")
     
@@ -405,6 +438,28 @@ class Config:
             logger.info(f"   ℹ️  Google Service Account: Not configured (optional)")
         
         # ═══════════════════════════════════════════════════════════════
+        # MISA AMIS
+        # ═══════════════════════════════════════════════════════════════
+        logger.info("─" * 55)
+        logger.info("🔄 MISA AMIS CONFIGURATION")
+        
+        misa = self._misa_config
+        if misa.is_configured():
+            app_id_preview = f"{misa.app_id[:8]}...{misa.app_id[-4:]}" if len(str(misa.app_id or '')) > 12 else "configured"
+            logger.info(f"   ✅ App ID: {app_id_preview}")
+            logger.info(f"   ✅ Access Code: {'*' * 8} (configured)")
+            logger.info(f"   ✅ Org Company Code: {misa.org_company_code}")
+        elif misa.app_id or misa.access_code:
+            if not misa.app_id:
+                logger.error(f"   ❌ App ID: MISSING")
+                issues.append("MISA: app_id missing")
+            if not misa.access_code:
+                logger.error(f"   ❌ Access Code: MISSING")
+                issues.append("MISA: access_code missing")
+        else:
+            logger.info(f"   ℹ️  MISA AMIS: Not configured (optional)")
+        
+        # ═══════════════════════════════════════════════════════════════
         # SUMMARY
         # ═══════════════════════════════════════════════════════════════
         logger.info("─" * 55)
@@ -444,6 +499,14 @@ class Config:
     def get_google_service_account(self) -> Dict[str, Any]:
         """Get Google service account configuration"""
         return self._google_service_account.copy()
+    
+    def get_misa_config(self) -> Dict[str, Any]:
+        """Get MISA AMIS API configuration"""
+        return self._misa_config.to_dict()
+    
+    def is_misa_configured(self) -> bool:
+        """Check if MISA AMIS is configured"""
+        return self._misa_config.is_configured()
     
     def get_app_setting(self, key: str, default: Any = None) -> Any:
         """Get application setting with default"""
@@ -498,6 +561,11 @@ class Config:
     def google_service_account(self) -> Dict[str, Any]:
         """Backward compatible property"""
         return self._google_service_account.copy()
+    
+    @property
+    def misa_config(self) -> Dict[str, Any]:
+        """MISA AMIS config property"""
+        return self.get_misa_config()
 
 
 # ==================== SINGLETON INSTANCE ====================
@@ -512,6 +580,7 @@ AWS_CONFIG = config.aws_config
 APP_CONFIG = config.app_config
 EXCHANGE_RATE_API_KEY = config.get_api_key("exchange_rate")
 GOOGLE_SERVICE_ACCOUNT_JSON = config.get_google_service_account()
+MISA_CONFIG = config.misa_config
 
 # Email exports
 INBOUND_EMAIL_CONFIG = config.get_email_config("inbound")
@@ -528,6 +597,7 @@ __all__ = [
     'APP_CONFIG',
     'EXCHANGE_RATE_API_KEY',
     'GOOGLE_SERVICE_ACCOUNT_JSON',
+    'MISA_CONFIG',
     'EMAIL_SENDER',
     'EMAIL_PASSWORD',
     'INBOUND_EMAIL_CONFIG',
