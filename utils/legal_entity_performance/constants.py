@@ -9,7 +9,7 @@ VERSION: 2.0.0
 # =============================================================================
 # ROLE DEFINITIONS (synced with KPI center)
 # =============================================================================
-ALLOWED_ROLES = ['admin', 'GM', 'MD', 'sales_manager']
+ALLOWED_ROLES = ['admin', 'GM', 'MD', 'sales_manager', 'accountant', 'fa_manager']
 
 # =============================================================================
 # DATA LOADING SETTINGS (synced with KPI center)
