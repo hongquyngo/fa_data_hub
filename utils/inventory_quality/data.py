@@ -476,10 +476,11 @@ class InventoryQualityData:
     
     @st.cache_data(ttl=300, show_spinner=False)
     def get_inventory_period_summary(_self, 
-                                      from_date,
-                                      to_date,
+                                      from_date_utc,
+                                      to_date_utc,
                                       warehouse_id: Optional[int] = None,
-                                      product_search: Optional[str] = None) -> pd.DataFrame:
+                                      product_search: Optional[str] = None,
+                                      entity_ids: Optional[tuple] = None) -> pd.DataFrame:
         """
         Get inventory period summary (Tổng hợp tồn kho theo kỳ).
         
@@ -493,8 +494,8 @@ class InventoryQualityData:
         - Closing = Opening + Period Stock In - Period Stock Out
         
         Args:
-            from_date: Period start date
-            to_date: Period end date
+            from_date_utc: Period start datetime in UTC (inclusive, >=)
+            to_date_utc: Period end datetime in UTC (exclusive, <)
             warehouse_id: Filter by warehouse or None for all
             product_search: Search by product name/code
         
@@ -503,9 +504,6 @@ class InventoryQualityData:
             opening_qty, stock_in_qty, stock_out_qty, closing_qty
         """
         try:
-            from datetime import timedelta
-            to_date_next = to_date + timedelta(days=1)
-            
             query = """
                 SELECT 
                     ih.product_id,
@@ -519,24 +517,24 @@ class InventoryQualityData:
                     ROUND(
                         COALESCE(SUM(CASE 
                             WHEN ih.type LIKE :sin_pattern 
-                                 AND ih.created_date < :from_date 
+                                 AND ih.created_date < :from_utc 
                             THEN ih.quantity ELSE 0 END), 0)
                         - COALESCE(SUM(CASE 
                             WHEN ih.type NOT LIKE :sin_pattern 
-                                 AND ih.created_date < :from_date 
+                                 AND ih.created_date < :from_utc 
                             THEN ih.quantity ELSE 0 END), 0)
                     , 5) AS opening_qty,
                     
                     ROUND(COALESCE(SUM(CASE 
                         WHEN ih.type LIKE :sin_pattern
-                             AND ih.created_date >= :from_date 
-                             AND ih.created_date < :to_date_next
+                             AND ih.created_date >= :from_utc 
+                             AND ih.created_date < :to_utc
                         THEN ih.quantity ELSE 0 END), 0), 5) AS stock_in_qty,
                     
                     ROUND(COALESCE(SUM(CASE 
                         WHEN ih.type NOT LIKE :sin_pattern
-                             AND ih.created_date >= :from_date 
-                             AND ih.created_date < :to_date_next
+                             AND ih.created_date >= :from_utc 
+                             AND ih.created_date < :to_utc
                         THEN ih.quantity ELSE 0 END), 0), 5) AS stock_out_qty
                     
                 FROM inventory_histories ih
@@ -546,8 +544,8 @@ class InventoryQualityData:
             """
             params = {
                 'sin_pattern': 'stockIn%',
-                'from_date': from_date,
-                'to_date_next': to_date_next,
+                'from_utc': from_date_utc,
+                'to_utc': to_date_utc,
             }
             
             if warehouse_id:
@@ -557,6 +555,17 @@ class InventoryQualityData:
             if product_search:
                 query += " AND (p.name LIKE :search OR p.pt_code LIKE :search OR p.legacy_pt_code LIKE :search OR p.package_size LIKE :search)"
                 params['search'] = f"%{product_search}%"
+            
+            if entity_ids:
+                placeholders = ', '.join([f':eid_{i}' for i in range(len(entity_ids))])
+                query += f"""
+                    AND ih.product_id IN (
+                        SELECT DISTINCT product_id 
+                        FROM inventory_quality_unified_view 
+                        WHERE owning_company_id IN ({placeholders})
+                    )"""
+                for i, eid in enumerate(entity_ids):
+                    params[f'eid_{i}'] = eid
             
             query += """
                 GROUP BY ih.product_id, p.pt_code, p.legacy_pt_code, p.name, p.uom, 
@@ -589,9 +598,10 @@ class InventoryQualityData:
     @st.cache_data(ttl=300, show_spinner=False)
     def get_product_period_detail(_self,
                                    product_id: int,
-                                   from_date,
-                                   to_date,
-                                   warehouse_id: Optional[int] = None) -> pd.DataFrame:
+                                   from_date_utc,
+                                   to_date_utc,
+                                   warehouse_id: Optional[int] = None,
+                                   entity_ids: Optional[tuple] = None) -> pd.DataFrame:
         """
         Get detailed stock in/out transactions for a specific product within a period.
         
@@ -606,17 +616,14 @@ class InventoryQualityData:
         
         Args:
             product_id: Product ID
-            from_date: Period start date
-            to_date: Period end date
+            from_date_utc: Period start datetime in UTC (inclusive, >=)
+            to_date_utc: Period end datetime in UTC (exclusive, <)
             warehouse_id: Filter by warehouse or None for all
         
         Returns:
             DataFrame with individual transactions including reference_no, related_order
         """
         try:
-            from datetime import timedelta
-            to_date_next = to_date + timedelta(days=1)
-            
             query = """
                 SELECT 
                     ih.id,
@@ -708,14 +715,14 @@ class InventoryQualityData:
                 
                 WHERE ih.product_id = :product_id
                   AND ih.delete_flag = 0
-                  AND ih.created_date >= :from_date
-                  AND ih.created_date < :to_date_next
+                  AND ih.created_date >= :from_utc
+                  AND ih.created_date < :to_utc
             """
             params = {
                 'sin_pattern': 'stockIn%',
                 'product_id': product_id,
-                'from_date': from_date,
-                'to_date_next': to_date_next,
+                'from_utc': from_date_utc,
+                'to_utc': to_date_utc,
             }
             
             if warehouse_id:
