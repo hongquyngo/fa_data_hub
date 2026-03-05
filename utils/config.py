@@ -177,11 +177,11 @@ class Config:
         # AWS
         aws_secrets = st.secrets.get("AWS", {})
         self._aws_config = AWSConfig(
-            access_key_id=aws_secrets.get("ACCESS_KEY_ID"),
-            secret_access_key=aws_secrets.get("SECRET_ACCESS_KEY"),
-            region=aws_secrets.get("REGION", "ap-southeast-1"),
-            bucket_name=aws_secrets.get("BUCKET_NAME", "prostech-erp-dev"),
-            app_prefix=aws_secrets.get("APP_PREFIX", "streamlit-app")
+            access_key_id=aws_secrets.get("AWS_ACCESS_KEY_ID"),
+            secret_access_key=aws_secrets.get("AWS_SECRET_ACCESS_KEY"),
+            region=aws_secrets.get("AWS_REGION", "ap-southeast-1"),
+            bucket_name=aws_secrets.get("S3_BUCKET_NAME", "prostech-erp-dev"),
+            app_prefix=aws_secrets.get("S3_APP_PREFIX", "streamlit-app")
         )
         
         # API Keys
